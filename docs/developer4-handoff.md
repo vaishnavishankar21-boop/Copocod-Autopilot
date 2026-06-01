@@ -8,7 +8,7 @@ AI Playbook Designer & Guardrails Engineer
 ## Deliverables Completed
 
 ### 1. SKILL.md
-Created the operational guide for Copado AutoPilot including:
+Created the operational guide for Copado Nexus including:
 
 - Identity & Responsibilities
 - Prerequisites Validation

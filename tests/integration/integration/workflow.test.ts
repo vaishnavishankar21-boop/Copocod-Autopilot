@@ -24,7 +24,7 @@ function runCliCommand(args: string, env: Record<string, string> = {}): { stdout
   }
 }
 
-describe("Copado AutoPilot Workflow Integration", () => {
+describe("Copado Nexus Workflow Integration", () => {
   beforeAll(() => {
     // Clean up context file before starting tests
     if (fs.existsSync(CONTEXT_PATH)) {
@@ -114,5 +114,61 @@ describe("Copado AutoPilot Workflow Integration", () => {
     // Verify context updated
     const contextContent = JSON.parse(fs.readFileSync(CONTEXT_PATH, "utf-8"));
     expect(contextContent.lastJobExecutionId).toBe(data.jobExecutionId);
+  });
+
+  it("should successfully execute the complete CopadoCon Demo Workflow", () => {
+    // 1. Set context to story US-2026
+    const setStoryRes = runCliCommand("story set --id US-2026 --json");
+    expect(setStoryRes.status).toBe(0);
+    const storyContext = JSON.parse(setStoryRes.stdout);
+    expect(storyContext.userStoryId).toBe("US-2026");
+
+    // 2. Ask Build Agent what changed
+    const buildRes = runCliCommand("ai ask --agent build \"What metadata files changed?\" --json");
+    expect(buildRes.status).toBe(0);
+    const buildData = JSON.parse(buildRes.stdout);
+    expect(buildData.response).toContain("LeadScoring.cls");
+
+    // 3. Ask Test Agent to generate CRT script
+    const testGenRes = runCliCommand("ai ask --agent test \"Generate a CRT script for LeadScoring.cls\" --json");
+    expect(testGenRes.status).toBe(0);
+    const testGenData = JSON.parse(testGenRes.stdout);
+    expect(testGenData.response).toContain("JOB-SMOKE-2026");
+
+    // 4. Run the Robotic test job
+    const runTestRes = runCliCommand("test run --job JOB-SMOKE-2026 --json");
+    expect(runTestRes.status).toBe(0);
+    const runTestData = JSON.parse(runTestRes.stdout);
+    expect(runTestData.executionId).toBe("EXEC-2026");
+    expect(runTestData.status).toBe("In Progress");
+
+    // Verify lastJobExecutionId is EXEC-2026
+    const ctx1 = JSON.parse(fs.readFileSync(CONTEXT_PATH, "utf-8"));
+    expect(ctx1.lastJobExecutionId).toBe("EXEC-2026");
+
+    // 5. Poll status (simulating watch loop/sequential status checks)
+    const status1 = runCliCommand("status --json");
+    expect(status1.status).toBe(0);
+    expect(JSON.parse(status1.stdout).status).toBe("In Progress");
+
+    const status2 = runCliCommand("status --json");
+    expect(status2.status).toBe(0);
+    expect(JSON.parse(status2.stdout).status).toBe("In Progress");
+
+    const status3 = runCliCommand("status --json");
+    expect(status3.status).toBe(0);
+    expect(JSON.parse(status3.stdout).status).toBe("Completed Successfully");
+
+    // 6. Push UAT validation promotion under CI (should succeed with confirm)
+    const promoteRes = runCliCommand("promote --env UAT --confirm --json", { CI: "true" });
+    expect(promoteRes.status).toBe(0);
+    const promoteData = JSON.parse(promoteRes.stdout);
+    expect(promoteData.jobExecutionId).toBe("JOB-2026");
+    expect(promoteData.status).toBe("In Progress");
+
+    // Verify context matches
+    const finalContext = JSON.parse(fs.readFileSync(CONTEXT_PATH, "utf-8"));
+    expect(finalContext.userStoryId).toBe("US-2026");
+    expect(finalContext.lastJobExecutionId).toBe("JOB-2026");
   });
 });

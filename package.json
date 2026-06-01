@@ -1,7 +1,7 @@
 {
-  "name": "copado-autopilot",
+  "name": "copado-nexus",
   "version": "1.0.0",
-  "description": "Copado AutoPilot CLI",
+  "description": "Copado Nexus CLI",
   "main": "index.js",
   "bin": {
     "copado-hx": "./src/cli/index.ts"

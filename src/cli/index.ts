@@ -16,7 +16,7 @@ const program = new Command();
 
 program
   .name("copado-hx")
-  .description("Copado AutoPilot CLI")
+  .description("Copado Nexus CLI")
   .version("1.0.0");
 
 // Helper to prompt user for confirmation
@@ -461,7 +461,7 @@ ai
   .option("--prompt <prompt>", "The natural language instruction")
   .argument("[promptText]", "Alternative positional prompt")
   .option("--json", "Output response in JSON format")
-  .action(async (options, positionalPrompt) => {
+  .action(async (positionalPrompt, options) => {
     const promptStr = options.prompt || positionalPrompt;
     if (!promptStr) {
       printError(

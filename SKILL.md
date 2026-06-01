@@ -1,4 +1,4 @@
-# Copado AutoPilot Skill Guide
+# Copado Nexus Skill Guide
 
 ---
 

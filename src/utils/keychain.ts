@@ -1,6 +1,6 @@
 import keytar from "keytar";
 
-const SERVICE_NAME = "copado-autopilot";
+const SERVICE_NAME = "copado-nexus";
 const ACCOUNT_NAME = "copado-user";
 
 export async function saveToken(

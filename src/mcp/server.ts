@@ -1,6 +1,6 @@
 // src/mcp/server.ts
 // =============================================================================
-// Copado AutoPilot — MCP Server (Part 3)
+// Copado Nexus — MCP Server
 // Exposes CLI commands as JSON-RPC tools for Claude Desktop / Google Antigravity
 // Uses @modelcontextprotocol/sdk v1.x (stable) with stdio transport
 // =============================================================================
@@ -149,7 +149,7 @@ function runCli(subcommand: string): CliResult {
 
 const server = new Server(
   {
-    name: "copado-autopilot",
+    name: "copado-nexus",
     version: "1.0.0",
   },
   {
@@ -159,7 +159,7 @@ const server = new Server(
   }
 );
 
-log("INFO", "Initializing Copado AutoPilot MCP Server v1.0.0");
+log("INFO", "Initializing Copado Nexus MCP Server v1.0.0");
 
 // =============================================================================
 // TOOL DEFINITIONS — ListToolsRequestSchema Handler
@@ -514,7 +514,7 @@ async function main(): Promise<void> {
   await server.connect(transport);
 
   // Use stderr for startup confirmation — stdout is now owned by MCP SDK
-  log("INFO", "✅ Copado AutoPilot MCP Server connected via stdio transport");
+  log("INFO", "✅ Copado Nexus MCP Server connected via stdio transport");
   log("INFO", "📡 Listening for JSON-RPC requests from Claude Desktop / Google Antigravity");
   log("INFO", `🔧 CLI resolver: ${getCliCommand()}`);
   log("INFO", `📄 Diagnostic log: ${LOG_FILE}`);
