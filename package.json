@@ -1,0 +1,16 @@
+{
+  "name": "copado-autopilot",
+  "version": "1.0.0",
+  "description": "Copado AutoPilot CLI",
+  "main": "index.js",
+  "bin": {
+    "copado-hx": "./src/cli/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/index.ts",
+    "start": "tsx src/cli/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
