@@ -145,71 +145,50 @@ copado-hx status --watch
 
 ## Playbook 1: Full Story Delivery (Commit → UAT → PROD)
 
-Triggered when user says:
-- "ship my story"
-- "deploy to production"
-- "complete release"
+Triggered when the user requests a deployment, promotion, or story shipment (e.g. "ship my story", "deploy to production", "complete release").
 
-### Steps:
+### Strict Sequencing Steps:
 
-1. Check authentication
+1. **Handshake Verification**: Call `auth status` to confirm handshake and valid credentials.
 ```bash
 copado-hx auth status
 ```
 
-2. Check active story
+2. **Workspace Diagnostics**: Parse the active workspace state via `story show` to retrieve the current context.
 ```bash
 copado-hx story show
 ```
+*If no user story is active, STOP execution and instruct the user to run `copado-hx story set --id <id>` first.*
 
-3. If no story is set:
-- STOP execution
-- Ask user to run:
-  `copado-hx story set --id <story-id>`
-
----
-
-4. Ask Build Agent for commit guidance
+3. **Pre-Commit Assessment**: Chain metadata scanning to the Build Agent via `copado_ai_ask` prior to commit execution.
 ```bash
-copado-hx ai ask --agent build "What should be committed for this story?"
+copado-hx ai ask --agent build "Scan metadata and determine what should be committed for this story."
 ```
 
----
-
-5. Commit changes
+4. **Commit Changes**: Commit the staged changes for the active User Story.
 ```bash
-copado-hx commit --message "<generated message>"
+copado-hx commit --message "<conventional commit message based on agent feedback>"
 ```
 
----
-
-6. Promote to UAT (validation only first)
+5. **Validation Promotion**: Promote the story to UAT for validation.
 ```bash
 copado-hx promote --env UAT --validate
 ```
 
----
-
-7. Monitor pipeline status
+6. **Monitor Pipeline**: Poll the status of the validation job.
 ```bash
 copado-hx status --watch
 ```
 
----
-
-8. Run CRT tests
+7. **Robotic Testing**: Force execution of a validation CRT suite via `copado_test_run` to verify quality metrics.
 ```bash
 copado-hx test run --job <job-id>
 ```
 
----
+8. **Human Approval Gate**: STOP operations and request clear text manual human confirmation:
+> "Confirm deployment to PROD? (Y/N)"
 
-9. STOP and ask human approval:
-> “Tests passed. Do you want to deploy to PROD?”
-
----
-
-10. Only after approval:
+9. **Production Deployment**: Only after explicit written human approval, proceed with deployment to PROD:
 ```bash
 copado-hx deploy --env PROD
 ```
@@ -270,14 +249,15 @@ These rules are mandatory and cannot be bypassed by the AI under any condition.
 
 ---
 
-### 🚫 Production Safety Rule
+### 🚫 Production & UAT Safety Rule
 
-Never deploy to production without explicit human confirmation.
+Never deploy or promote to UAT or PROD without explicit human confirmation.
 
-If a deploy to PROD is requested:
-- STOP execution
-- Ask user for approval:
-  > "Are you sure you want to deploy to PROD?"
+If a command containing the target strings `deploy` or `promote` is paired with an environment parameter equal to `UAT` or `PROD`, the AI agent MUST:
+- Immediately HALT all operations.
+- Request clear text manual human confirmation by prompting exactly:
+  > "Confirm deployment to PROD? (Y/N)" or "Confirm promotion to UAT? (Y/N)"
+- Wait for explicit written human confirmation before proceeding.
 
 ---
 
@@ -320,10 +300,7 @@ If any test fails:
 
 ### 🚫 Human-in-the-loop enforcement
 
-Any destructive action requires confirmation:
-- deploy
-- promote to PROD
-- rollback actions
+Any deployment or promotion targeting `UAT` or `PROD` requires explicit human-in-the-loop manual confirmation. The agent must present the plan to the operator and await explicit written approval before proceeding. Do NOT execute autonomous deployments.
 
 ---
 

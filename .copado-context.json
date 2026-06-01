@@ -1,0 +1,11 @@
+{
+  "userStoryId": "US-1234",
+  "pipelineId": "PIPE-1234",
+  "lastJobExecutionId": "JOB-3266",
+  "jobStatuses": {
+    "EXEC-5035": {
+      "status": "Completed Successfully",
+      "pollCount": 3
+    }
+  }
+}
