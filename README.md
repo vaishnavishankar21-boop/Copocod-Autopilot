@@ -2,7 +2,7 @@
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Vitest Passing](https://img.shields.io/badge/Tests-Vitest%20Passed-brightgreen)](tests/integration/integration/workflow.test.ts)
-[![Hackathon Ready](https://img.shields.io/badge/Presentation-Hackathon%20Ready-orange)](#)
+
 
 **Copado Nexus** is a secure, browserless, enterprise-grade Salesforce DevOps orchestration layer designed to embed natively within AI-first IDE environments (such as Google Antigravity or Cursor). It bridges the gap between raw terminal execution and autonomous AI reasoning by seamlessly combining local state tracking, secure keychain storage, and a Model Context Protocol (MCP) server.
 
