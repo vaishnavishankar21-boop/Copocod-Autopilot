@@ -6,15 +6,19 @@ export interface CopadoContext {
   pipelineId: string | null;
   lastJobExecutionId: string | null;
   jobStatuses?: Record<string, { status: string; pollCount: number }>;
+  testStatuses?: Record<string, { status: string; pollCount: number }>;
 }
 
-const CONTEXT_FILE = path.join(process.cwd(), ".copado-context.json");
+const CONTEXT_FILE = process.env.COPADO_CONTEXT_FILE
+  ? path.resolve(process.cwd(), process.env.COPADO_CONTEXT_FILE)
+  : path.join(process.cwd(), ".copado-context.json");
 
 const DEFAULT_CONTEXT: CopadoContext = {
   userStoryId: null,
   pipelineId: null,
   lastJobExecutionId: null,
   jobStatuses: {},
+  testStatuses: {},
 };
 
 export function getContext(): CopadoContext {

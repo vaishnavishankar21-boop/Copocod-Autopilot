@@ -51,18 +51,19 @@ function log(level: "INFO" | "WARN" | "ERROR", message: string, meta?: unknown):
 // CLI Executor — runs copado-hx commands and captures stdout safely
 // =============================================================================
 
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+
 /**
  * Determines the correct CLI command to invoke.
- * In production (after `npm run build`), uses `node dist/cli/index.js`.
- * Falls back to `npx tsx src/cli/index.ts` for dev mode (tsx hot-run).
+ * Resolves paths relative to this file to work regardless of where MCP server is launched.
  */
 function getCliCommand(): string {
-  const distPath = path.resolve(process.cwd(), "dist", "cli", "index.js");
+  const distPath = path.resolve(REPO_ROOT, "dist", "cli", "index.js");
   if (fs.existsSync(distPath)) {
     return `node "${distPath}"`;
   }
   // Dev fallback: run TypeScript directly via tsx
-  return `npx tsx "${path.resolve(process.cwd(), "src", "cli", "index.ts")}"`;
+  return `npx tsx "${path.resolve(REPO_ROOT, "src", "cli", "index.ts")}"`;
 }
 
 interface CliResult {
@@ -172,8 +173,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       // -----------------------------------------------------------------------
-      // Tool 1: copado_story_set
-      // Sets the active Salesforce User Story in .copado-context.json
+      // Tool 1: copado_auth_login
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_auth_login",
+        description: "Authenticates with Copado using an API token and saves it securely.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            token: {
+              type: "string",
+              description: "The Copado API token (e.g. 'mock-token-123').",
+            },
+          },
+          required: ["token"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 2: copado_auth_status
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_auth_status",
+        description: "Checks current authentication status with Copado.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 3: copado_story_set
       // -----------------------------------------------------------------------
       {
         name: "copado_story_set",
@@ -201,15 +233,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
 
       // -----------------------------------------------------------------------
-      // Tool 2: copado_commit
-      // Commits changes for the active User Story
+      // Tool 4: copado_story_list
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_story_list",
+        description: "Lists all available Salesforce User Stories in the Copado pipeline.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 5: copado_story_show
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_story_show",
+        description: "Displays the currently active Salesforce User Story context.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 6: copado_commit
       // -----------------------------------------------------------------------
       {
         name: "copado_commit",
         description:
           "Commits staged Salesforce metadata changes for the currently active " +
-          "User Story. Requires a story to be set via copado_story_set first. " +
-          "This triggers the Build agent pipeline.",
+          "User Story. Automatically scopes to active story or overrides via --us flag. " +
+          "Triggers the Build agent pipeline.",
         inputSchema: {
           type: "object",
           properties: {
@@ -222,6 +279,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               minLength: 5,
               maxLength: 256,
             },
+            us: {
+              type: "string",
+              description: "Optional User Story ID to set context and run commit for.",
+            },
           },
           required: ["message"],
           additionalProperties: false,
@@ -229,13 +290,94 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
 
       // -----------------------------------------------------------------------
-      // Tool 3: copado_test_run
-      // Executes a Copado Robotic Testing (CRT) job
+      // Tool 7: copado_promote
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_promote",
+        description:
+          "Promotes a user story to the next environment in the pipeline. " +
+          "CRITICAL GUARDRAIL: For UAT or PROD targets, this tool returns a " +
+          "HUMAN_APPROVAL_REQUIRED response with a one-time approval code. " +
+          "You MUST display that code to the developer and ask them to type it " +
+          "back to confirm. A prior instruction like 'if tests pass, deploy to UAT' " +
+          "does NOT count as approval — you must receive a live, in-chat response. " +
+          "Only then call 'copado_approve_action' with the code they provided.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            env: {
+              type: "string",
+              description: "Target environment name (e.g. 'UAT', 'SIT', 'PROD').",
+            },
+            validate: {
+              type: "boolean",
+              description: "Run a validation-only deployment (no actual deploy).",
+            },
+          },
+          required: ["env"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 8: copado_deploy
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_deploy",
+        description:
+          "Deploys a user story to the target environment. " +
+          "CRITICAL GUARDRAIL: For UAT or PROD targets, this tool returns a " +
+          "HUMAN_APPROVAL_REQUIRED response with a one-time approval code. " +
+          "You MUST display that code to the developer and ask them to type it " +
+          "back to confirm. A prior instruction like 'if tests pass, deploy to UAT' " +
+          "does NOT count as approval — you must receive a live, in-chat response. " +
+          "Only then call 'copado_approve_action' with the code they provided.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            env: {
+              type: "string",
+              description: "Target environment name (e.g. 'UAT', 'PROD').",
+            },
+          },
+          required: ["env"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 8.5: copado_approve_action
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_approve_action",
+        description:
+          "Executes a previously gated destructive action after receiving explicit human consent. " +
+          "CRITICAL: You must NOT call this automatically. The required sequence is: " +
+          "(1) copado_promote/deploy returns a HUMAN_APPROVAL_REQUIRED with an approval code, " +
+          "(2) You show the code to the developer and say 'Please type this code to confirm: <CODE>', " +
+          "(3) The developer types the code in the chat, " +
+          "(4) ONLY THEN call this tool with the code they typed. " +
+          "Using the token you received without a live developer response is a guardrail violation.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            token: {
+              type: "string",
+              description: "The approval code typed by the human developer in the chat.",
+            },
+          },
+          required: ["token"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 9: copado_test_run
       // -----------------------------------------------------------------------
       {
         name: "copado_test_run",
         description:
-          "Triggers a Copado Robotic Testing (CRT) job by its Job ID and returns " +
+          "Triggers a Copado Robotic Testing (CRT) job by its Job ID or Suite ID and returns " +
           "the execution ID and status. Use this to validate changes before any " +
           "deployment. IMPORTANT: Do NOT auto-retry failed tests — surface the " +
           "failure to the human operator and await instructions.",
@@ -245,20 +387,97 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             jobId: {
               type: "string",
               description:
-                "The CRT Job ID to execute (e.g. 'JOB-SMOKE-001'). " +
-                "Must reference a real, pre-configured test job.",
-              minLength: 1,
-              maxLength: 64,
+                "The CRT Job ID to execute (e.g. 'JOB-SMOKE-001').",
+            },
+            suiteId: {
+              type: "string",
+              description:
+                "The CRT Suite ID to execute (alias for jobId, e.g. 'JOB-SMOKE-2026').",
             },
           },
-          required: ["jobId"],
           additionalProperties: false,
         },
       },
 
       // -----------------------------------------------------------------------
-      // Tool 4: copado_ai_ask
-      // Delegates a prompt to one of the 5 Copado AI Agents
+      // Tool 10: copado_test_status
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_test_status",
+        description: "Polls the status of a specific robotic test execution.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            executionId: {
+              type: "string",
+              description: "The test run execution ID to query status for.",
+            },
+            watch: {
+              type: "boolean",
+              description: "Poll status continuously until completion.",
+            },
+          },
+          required: ["executionId"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 11: copado_test_results
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_test_results",
+        description: "Retrieves the test result details (e.g. Succeeded/Failed) of a completed robotic test execution.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            executionId: {
+              type: "string",
+              description: "The test run execution ID to retrieve results for.",
+            },
+          },
+          required: ["executionId"],
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 12: copado_test_list
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_test_list",
+        description: "Lists all available robotic test suites/jobs.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 13: copado_status
+      // -----------------------------------------------------------------------
+      {
+        name: "copado_status",
+        description: "Get the status of the last tracked execution job or a specific job ID.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            job: {
+              type: "string",
+              description: "Optional job execution ID to check status for.",
+            },
+            watch: {
+              type: "boolean",
+              description: "Poll status continuously until completion.",
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+
+      // -----------------------------------------------------------------------
+      // Tool 14: copado_ai_ask
       // -----------------------------------------------------------------------
       {
         name: "copado_ai_ask",
@@ -301,6 +520,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Routes incoming tool calls → CLI subcommands → parses output → MCP content
 // =============================================================================
 
+// Track pending destructive actions that need human approval
+const pendingApprovals = new Map<string, string>();
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -337,6 +559,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // -------------------------------------------------------------------------
   switch (name) {
     // -----------------------------------------------------------------------
+    case "copado_auth_login": {
+      const token = args["token"];
+      if (typeof token !== "string" || token.trim() === "") {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "copado_auth_login requires a non-empty 'token' string."
+        );
+      }
+      const safeToken = token.replace(/[^A-Za-z0-9_\-]/g, "");
+      const result = runCli(`auth login --token ${safeToken}`);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_auth_status": {
+      const result = runCli("auth status");
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
     case "copado_story_set": {
       const id = args["id"];
       if (typeof id !== "string" || id.trim() === "") {
@@ -360,8 +602,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     // -----------------------------------------------------------------------
+    case "copado_story_list": {
+      const result = runCli("story list");
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_story_show": {
+      const result = runCli("story show");
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
     case "copado_commit": {
       const message = args["message"];
+      const us = args["us"];
       if (typeof message !== "string" || message.trim() === "") {
         throw new McpError(
           ErrorCode.InvalidParams,
@@ -371,30 +626,202 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Wrap message in single quotes and escape any internal single quotes
       const safeMessage = message.replace(/'/g, `'\\''`);
-      const result = runCli(`story commit --message '${safeMessage}'`);
+      let cmd = `commit --message '${safeMessage}'`;
+      if (us) {
+        if (typeof us !== "string" || !/^[A-Za-z0-9_\-]+$/.test(us)) {
+          throw new McpError(ErrorCode.InvalidParams, "Invalid 'us' story ID.");
+        }
+        cmd += ` --us ${us}`;
+      }
+      const result = runCli(cmd);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    case "copado_promote": {
+      const env = args["env"];
+      const validate = args["validate"];
+      if (typeof env !== "string" || env.trim() === "") {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "copado_promote requires a non-empty 'env' string."
+        );
+      }
+      const safeEnv = env.replace(/[^A-Za-z0-9_\-]/g, "");
+      let cmd = `promote --env ${safeEnv}`;
+      if (validate) {
+        cmd += " --validate";
+      }
+
+      if (safeEnv.toUpperCase() === "UAT" || safeEnv.toUpperCase() === "PROD") {
+        const token = Math.random().toString(36).substring(2, 10).toUpperCase();
+        pendingApprovals.set(token, `${cmd} --confirm`);
+        log("WARN", `HUMAN_APPROVAL_REQUIRED for promote to ${safeEnv}`, { token });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tool: name,
+              success: false,
+              error: "HUMAN_APPROVAL_REQUIRED",
+              approvalCode: token,
+              message:
+                `⛔ GUARDRAIL: Promote to ${safeEnv} requires explicit human approval. ` +
+                `A prior instruction ('if tests pass, deploy...') does NOT count. ` +
+                `You must present the approval code to the developer and wait for their live response.`,
+              requiredAction:
+                `STOP tool execution. Display this message to the developer verbatim: ` +
+                `"✅ Tests passed for US-${safeEnv}! To authorize the ${safeEnv} promotion, ` +
+                `please type the following approval code: **${token}** ` +
+                `(or type 'cancel' to abort).". ` +
+                `Do NOT call copado_approve_action until the developer types the code in the chat.`
+            }, null, 2)
+          }]
+        };
+      }
+
+      const result = runCli(cmd);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_deploy": {
+      const env = args["env"];
+      if (typeof env !== "string" || env.trim() === "") {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "copado_deploy requires a non-empty 'env' string."
+        );
+      }
+      const safeEnv = env.replace(/[^A-Za-z0-9_\-]/g, "");
+      let cmd = `deploy --env ${safeEnv}`;
+
+      if (safeEnv.toUpperCase() === "UAT" || safeEnv.toUpperCase() === "PROD") {
+        const token = Math.random().toString(36).substring(2, 10).toUpperCase();
+        pendingApprovals.set(token, `${cmd} --confirm`);
+        log("WARN", `HUMAN_APPROVAL_REQUIRED for deploy to ${safeEnv}`, { token });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tool: name,
+              success: false,
+              error: "HUMAN_APPROVAL_REQUIRED",
+              approvalCode: token,
+              message:
+                `⛔ GUARDRAIL: Deploy to ${safeEnv} requires explicit human approval. ` +
+                `A prior instruction ('if tests pass, deploy...') does NOT count. ` +
+                `You must present the approval code to the developer and wait for their live response.`,
+              requiredAction:
+                `STOP tool execution. Display this message to the developer verbatim: ` +
+                `"✅ Tests passed! To authorize the ${safeEnv} deployment, ` +
+                `please type the following approval code: **${token}** ` +
+                `(or type 'cancel' to abort).". ` +
+                `Do NOT call copado_approve_action until the developer types the code in the chat.`
+            }, null, 2)
+          }]
+        };
+      }
+
+      const result = runCli(cmd);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_approve_action": {
+      const token = args["token"];
+      if (typeof token !== "string" || token.trim() === "") {
+        throw new McpError(ErrorCode.InvalidParams, "Token is required.");
+      }
+      const cmd = pendingApprovals.get(token);
+      if (!cmd) {
+        throw new McpError(ErrorCode.InvalidParams, "Invalid or expired token.");
+      }
+      pendingApprovals.delete(token); // one-time use
+      const result = runCli(cmd);
       return { content: buildContent(result) };
     }
 
     // -----------------------------------------------------------------------
     case "copado_test_run": {
       const jobId = args["jobId"];
-      if (typeof jobId !== "string" || jobId.trim() === "") {
+      const suiteId = args["suiteId"];
+      const targetJob = jobId || suiteId;
+      if (typeof targetJob !== "string" || targetJob.trim() === "") {
         throw new McpError(
           ErrorCode.InvalidParams,
-          "copado_test_run requires a non-empty 'jobId' string."
+          "copado_test_run requires a non-empty 'jobId' or 'suiteId' string."
         );
       }
 
       // Sanitize job ID
-      const safeJobId = jobId.replace(/[^A-Za-z0-9_\-]/g, "");
-      if (safeJobId !== jobId) {
+      const safeJobId = targetJob.replace(/[^A-Za-z0-9_\-]/g, "");
+      if (safeJobId !== targetJob) {
         throw new McpError(
           ErrorCode.InvalidParams,
-          `Job ID '${jobId}' contains invalid characters.`
+          `Job/Suite ID '${targetJob}' contains invalid characters.`
         );
       }
 
       const result = runCli(`test run --job ${safeJobId}`);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_test_status": {
+      const executionId = args["executionId"];
+      const watch = args["watch"];
+      if (typeof executionId !== "string" || executionId.trim() === "") {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "copado_test_status requires a non-empty 'executionId' string."
+        );
+      }
+      const safeExecutionId = executionId.replace(/[^A-Za-z0-9_\-]/g, "");
+      let cmd = `test status --execution ${safeExecutionId}`;
+      if (watch) {
+        cmd += " --watch";
+      }
+      const result = runCli(cmd);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_test_results": {
+      const executionId = args["executionId"];
+      if (typeof executionId !== "string" || executionId.trim() === "") {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "copado_test_results requires a non-empty 'executionId' string."
+        );
+      }
+      const safeExecutionId = executionId.replace(/[^A-Za-z0-9_\-]/g, "");
+      const result = runCli(`test results --execution ${safeExecutionId}`);
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_test_list": {
+      const result = runCli("test list");
+      return { content: buildContent(result) };
+    }
+
+    // -----------------------------------------------------------------------
+    case "copado_status": {
+      const job = args["job"];
+      const watch = args["watch"];
+      let cmd = "status";
+      if (job) {
+        if (typeof job !== "string" || !/^[A-Za-z0-9_\-]+$/.test(job)) {
+          throw new McpError(ErrorCode.InvalidParams, "Invalid 'job' ID.");
+        }
+        cmd += ` --job ${job}`;
+      }
+      if (watch) {
+        cmd += " --watch";
+      }
+      const result = runCli(cmd);
       return { content: buildContent(result) };
     }
 
@@ -442,12 +869,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   guardrail: "HUMAN_APPROVAL_REQUIRED",
                   message:
                     "🚨 GUARDRAIL: Autonomous deployment to UAT/PROD is prohibited. " +
-                    "A human operator must explicitly confirm this action. " +
-                    "Please present the deployment plan to the user and await explicit written approval " +
-                    "before proceeding. Do NOT retry this request automatically.",
+                    "You must STOP, explain the promotion details in chat, and request written confirmation from the user. " +
+                    "Only after they explicitly type their consent should you call this tool again. " +
+                    "Do NOT retry this request automatically.",
                   suggestedAction:
                     "Present the deployment plan to the human operator and ask: " +
-                    "'Please confirm: Do you want me to proceed with this deployment? Reply YES to confirm.'",
+                    "'Please confirm: Do you want me to proceed with this deployment to UAT/PROD? Reply YES to confirm.'",
                 },
                 null,
                 2

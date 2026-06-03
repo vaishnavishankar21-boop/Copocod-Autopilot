@@ -4,13 +4,14 @@
   "description": "Copado Nexus CLI",
   "main": "index.js",
   "bin": {
-    "copado-hx": "./src/cli/index.ts"
+    "copado-hx": "./dist/cli/index.js"
   },
   "scripts": {
     "dev": "tsx src/cli/index.ts",
     "start": "tsx src/cli/index.ts",
     "build": "tsc",
-    "test": "vitest run"
+    "test": "vitest run",
+    "mock-server": "tsx src/api/mockServer.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",

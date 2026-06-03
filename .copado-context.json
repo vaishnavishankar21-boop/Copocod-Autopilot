@@ -1,15 +1,37 @@
 {
   "userStoryId": "US-2026",
   "pipelineId": "PIPE-2026",
-  "lastJobExecutionId": "EXEC-2026",
+  "lastJobExecutionId": "JOB-2026",
   "jobStatuses": {
-    "EXEC-2239": {
+    "EXEC-8489": {
+      "status": "In Progress",
+      "pollCount": 2
+    },
+    "EXEC-7626": {
       "status": "Completed Successfully",
       "pollCount": 3
     },
     "EXEC-2026": {
       "status": "Completed Successfully",
       "pollCount": 3
+    },
+    "JOB-CUSTOM-100": {
+      "status": "In Progress",
+      "pollCount": 2
+    },
+    "JOB-2026": {
+      "status": "Completed Successfully",
+      "pollCount": 7
+    }
+  },
+  "testStatuses": {
+    "EXEC-2026": {
+      "status": "Succeeded",
+      "pollCount": 10
+    },
+    "EXEC-4231": {
+      "status": "In Progress",
+      "pollCount": 1
     }
   }
 }

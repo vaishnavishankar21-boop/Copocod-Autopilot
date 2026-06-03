@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
 const CLI_PATH = path.resolve(process.cwd(), "src", "cli", "index.ts");
-const CONTEXT_PATH = path.resolve(process.cwd(), ".copado-context.json");
+const CONTEXT_PATH = path.resolve(process.cwd(), `.copado-context-test-${process.pid}.json`);
 
 function runCliCommand(args: string, env: Record<string, string> = {}): { stdout: string; status: number } {
   try {
@@ -12,13 +12,17 @@ function runCliCommand(args: string, env: Record<string, string> = {}): { stdout
       encoding: "utf-8",
       env: {
         ...process.env,
+        COPADO_CONTEXT_FILE: path.basename(CONTEXT_PATH),
         ...env,
       },
     });
     return { stdout: stdout.trim(), status: 0 };
   } catch (err: any) {
+    const errOutput = err.stdout?.toString().trim() || "";
+    const errError = err.stderr?.toString().trim() || "";
+    console.error(`CLI Command failed: ${args}\nExit Code: ${err.status}\nStdout: ${errOutput}\nStderr: ${errError}`);
     return {
-      stdout: err.stdout?.toString().trim() || err.message,
+      stdout: errOutput || err.message,
       status: err.status ?? 1,
     };
   }
@@ -32,12 +36,19 @@ describe("Copado Nexus Workflow Integration", () => {
     }
   });
 
+  afterAll(() => {
+    // Clean up context file after tests finish
+    if (fs.existsSync(CONTEXT_PATH)) {
+      fs.unlinkSync(CONTEXT_PATH);
+    }
+  });
+
   it("should start with clean auth and login successfully", () => {
     // Run login
-    const loginResult = runCliCommand("auth login --token test-token --json");
+    const loginResult = runCliCommand("auth login --token mock-token --json");
     expect(loginResult.status).toBe(0);
     const loginData = JSON.parse(loginResult.stdout);
-    expect(loginData.token).toBe("test-token");
+    expect(loginData.token).toBe("mock-token");
 
     // Run status check
     const statusResult = runCliCommand("auth status --json");
@@ -171,4 +182,68 @@ describe("Copado Nexus Workflow Integration", () => {
     expect(finalContext.userStoryId).toBe("US-2026");
     expect(finalContext.lastJobExecutionId).toBe("JOB-2026");
   });
-});
+
+  it("should successfully execute new Track B commands and options", () => {
+    // 1. Check story list
+    const storyListRes = runCliCommand("story list --json");
+    expect(storyListRes.status).toBe(0);
+    const stories = JSON.parse(storyListRes.stdout);
+    expect(stories.length).toBeGreaterThan(0);
+    expect(stories[0].id).toBe("US-2026");
+
+    // 2. Commit with --us flag (sets context and runs commit)
+    const commitRes = runCliCommand("commit --us US-7890 --message \"feat: dynamic story commit\" --json");
+    expect(commitRes.status).toBe(0);
+    const commitData = JSON.parse(commitRes.stdout);
+    expect(commitData.commitId).toContain("COMMIT-");
+
+    // Verify context updated
+    const ctxAfterCommit = JSON.parse(fs.readFileSync(CONTEXT_PATH, "utf-8"));
+    expect(ctxAfterCommit.userStoryId).toBe("US-7890");
+
+    // 3. Check status --job flag
+    const statusJobRes = runCliCommand("status --job JOB-CUSTOM-100 --json");
+    expect(statusJobRes.status).toBe(0);
+    const statusJobData = JSON.parse(statusJobRes.stdout);
+    expect(statusJobData.jobExecutionId).toBe("JOB-CUSTOM-100");
+    expect(statusJobData.status).toBe("In Progress");
+
+    // 4. Check test list
+    const testListRes = runCliCommand("test list --json");
+    expect(testListRes.status).toBe(0);
+    const suites = JSON.parse(testListRes.stdout);
+    expect(suites.length).toBeGreaterThan(0);
+    expect(suites[0].jobId).toBe("JOB-SMOKE-2026");
+
+    // 5. Run test with --suite flag
+    const runTestSuiteRes = runCliCommand("test run --suite JOB-SMOKE-2026 --json");
+    expect(runTestSuiteRes.status).toBe(0);
+    const testSuiteData = JSON.parse(runTestSuiteRes.stdout);
+    expect(testSuiteData.executionId).toBe("EXEC-2026");
+    expect(testSuiteData.projectId).toBe("PRJ-2026");
+    expect(testSuiteData.jobId).toBe("JOB-SMOKE-2026");
+
+    // 6. Check test status (progressive polling check)
+    // 1st check -> In Progress
+    const testStatus1 = runCliCommand("test status --execution EXEC-2026 --json");
+    expect(testStatus1.status).toBe(0);
+    expect(JSON.parse(testStatus1.stdout).status).toBe("In Progress");
+
+    // 2nd check -> In Progress
+    const testStatus2 = runCliCommand("test status --execution EXEC-2026 --json");
+    expect(testStatus2.status).toBe(0);
+    expect(JSON.parse(testStatus2.stdout).status).toBe("In Progress");
+
+    // 3rd check -> Succeeded
+    const testStatus3 = runCliCommand("test status --execution EXEC-2026 --json");
+    expect(testStatus3.status).toBe(0);
+    expect(JSON.parse(testStatus3.stdout).status).toBe("Succeeded");
+
+    // 7. Check test results
+    const testResultsRes = runCliCommand("test results --execution EXEC-2026 --json");
+    expect(testResultsRes.status).toBe(0);
+    const testResultsData = JSON.parse(testResultsRes.stdout);
+    expect(testResultsData.executionId).toBe("EXEC-2026");
+    expect(testResultsData.testResult).toBe("Succeeded");
+  });
+}, 60000);
