@@ -5,7 +5,11 @@
 **Enterprise-grade, browserless Salesforce DevOps orchestration for AI-first IDEs**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Vitest Passing](https://img.shields.io/badge/Tests-Vitest%20Passed-brightgreen)](tests/integration/integration/workflow.test.ts)
+[![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org)
+[![MCP SDK](https://img.shields.io/badge/MCP%20SDK-1.x-purple)](https://modelcontextprotocol.io)
+[![Tests](https://img.shields.io/badge/Tests-Vitest%20Passing-brightgreen)](tests/)
+[![Hackathon Ready](https://img.shields.io/badge/Status-Hackathon%20Ready-orange)](#)
 
 
 </div>
@@ -150,7 +154,7 @@ Before installing, ensure you have:
 ### Step 1 — Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/Copocod-Autopilot.git
+git clone https://github.com/vaishnavishankar21-boop/Copocod-Autopilot.git
 cd Copocod-Autopilot
 ```
 
@@ -200,7 +204,7 @@ To make Copado Nexus available to AI agents in Claude Desktop:
   "mcpServers": {
     "copado-nexus": {
       "command": "node",
-      "args": ["d:/Hackathon/Copocod-Autopilot/dist/mcp/server.js"],
+      "args": ["/path/to/Copocod-Autopilot/dist/mcp/server.js"],
       "env": {
         "CI": "true"
       }
@@ -212,7 +216,7 @@ To make Copado Nexus available to AI agents in Claude Desktop:
 For **Cursor**: Go to Settings → Models → MCP → `+ Add New MCP Server`:
 - **Name**: `copado-nexus`
 - **Type**: `stdio`
-- **Command**: `node d:/Hackathon/Copocod-Autopilot/dist/mcp/server.js`
+- **Command**: `node /path/to/Copocod-Autopilot/dist/mcp/server.js`
 
 For **Google Antigravity**: Add to your `mcp_config.json`:
 
@@ -221,11 +225,13 @@ For **Google Antigravity**: Add to your `mcp_config.json`:
   "mcpServers": {
     "copado-nexus": {
       "command": "node",
-      "args": ["d:/Hackathon/Copocod-Autopilot/dist/mcp/server.js"]
+      "args": ["/path/to/Copocod-Autopilot/dist/mcp/server.js"]
     }
   }
 }
 ```
+
+> **Note**: Replace `/path/to/Copocod-Autopilot` with the absolute path to the cloned repository on your machine.
 
 ---
 
@@ -418,9 +424,13 @@ Base URL: `https://copadogpt-api.robotic.copado.com` (configurable via `COPADO_B
 
 | Variable | Default | Description |
 |---|---|---|
+| `COPADO_ACTIONS_URL` | `https://api.copado.com` | Override Actions REST API base URL |
+| `COPADO_CRT_URL` | `https://pace.robotic.copado.com` | Override Robotic Testing API base URL |
 | `COPADO_BASE_URL` | `https://copadogpt-api.robotic.copado.com` | AI Hub region URL |
-| `COPADO_ORG_ID` | `1` | Your Copado organization ID |
+| `COPADO_ORG_ID` | `<your-org-id>` | Your Copado organization ID |
 | `COPADO_CONTEXT_FILE` | `.copado-context.json` | Override context file path |
+
+> **Tip:** To test locally without a real Copado backend, start the bundled mock server with `npm run mock-server` and set `COPADO_ACTIONS_URL=http://localhost:3000` and `COPADO_CRT_URL=http://localhost:3000`.
 
 ---
 
@@ -534,6 +544,7 @@ Copocod-Autopilot/
 │   │
 │   ├── api/
 │   │   ├── client.ts         # Copado API client (live + mock fallback)
+│   │   ├── mockServer.ts     # Local HTTP mock server for all API endpoints
 │   │   ├── mockCopado.ts     # Mock API responses for offline use
 │   │   ├── mockGateway.ts    # Network delay simulator
 │   │   └── types.ts          # Shared TypeScript interface definitions
@@ -606,6 +617,21 @@ npx tsx src/cli/index.ts promote --env UAT --confirm --json
 | `stdout corrupted` in MCP | Stray `console.log` in code | Use only `console.error` for diagnostics in MCP context |
 | Context not persisting | Wrong working directory | Run CLI from the repo root where `.copado-context.json` lives |
 | `HUMAN_APPROVAL_REQUIRED` loop | Missing `--confirm` flag in CI mode | Set `CI=true` and pass `--confirm` flag |
+| `Actions REST API connection error: fetch failed` | `api.copado.com` unreachable | Start mock server: `npm run mock-server`, set `COPADO_ACTIONS_URL=http://localhost:3000` |
+| `CRT Open API returned status 500` | Mock project ID used on real server | Start mock server: `npm run mock-server`, set `COPADO_CRT_URL=http://localhost:3000` |
+
+### Checking Online vs. Offline Mode
+
+Run `copado-hx auth status` at any time to see which mode the CLI is operating in:
+
+```bash
+npx tsx src/cli/index.ts auth status
+# Online mode:  "Authenticated as developer@copado.com [Mode: Online]"
+# Offline mode: "Authenticated as developer@copado.com [Mode: Offline (Mocked)]"
+```
+
+- **Online** — Real API token stored. CLI will attempt live network calls to Copado APIs.
+- **Offline (Mocked)** — Mock token in use. All API calls are simulated locally via `simulateNetwork`.
 
 ---
 
