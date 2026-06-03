@@ -5,11 +5,8 @@
 **Enterprise-grade, browserless Salesforce DevOps orchestration for AI-first IDEs**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org)
-[![MCP SDK](https://img.shields.io/badge/MCP%20SDK-1.x-purple)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/Tests-Vitest%20Passing-brightgreen)](tests/)
-[![Hackathon Ready](https://img.shields.io/badge/Status-Hackathon%20Ready-orange)](#)
+[![Vitest Passing](https://img.shields.io/badge/Tests-Vitest%20Passed-brightgreen)](tests/integration/integration/workflow.test.ts)
+
 
 </div>
 
